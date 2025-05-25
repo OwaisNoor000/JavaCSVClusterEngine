@@ -7,6 +7,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,7 +56,7 @@ public class CsvUtils {
              CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT.withFirstRecordAsHeader())) {
 
             Map<String, Integer> headerMap = csvParser.getHeaderMap();
-            // Validate column names
+            // Column name validation
             if (!headerMap.keySet().containsAll(List.of("prod_name", "product_type_name", "colour_name"))) {
                 throw new IllegalArgumentException("CSV must contain headers: prod_name, product_type_name, colour_name");
             }
@@ -70,5 +71,43 @@ public class CsvUtils {
         }
 
         return productList;
+    }
+    
+    public static void writeToCSV(List<Map<String, Object>> data, OutputStream outputStream) throws IOException {
+        if (data == null || data.isEmpty()) {
+            throw new IllegalArgumentException("No data to write.");
+        }
+
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream))) {
+            // write the header 
+            Set<String> headers = data.get(0).keySet();
+            writer.write(String.join(",", headers));
+            writer.newLine();
+
+            // ROW
+            for (Map<String, Object> row : data) {
+                StringBuilder line = new StringBuilder();
+                for (String header : headers) {
+                    Object value = row.get(header);
+                    String cell = value == null ? "" : escapeCsv(value.toString());
+                    line.append(cell).append(",");
+                }
+                // Remove commas at sentence end
+                if (line.length() > 0) {
+                    line.setLength(line.length() - 1);
+                }
+                writer.write(line.toString());
+                writer.newLine();
+            }
+        }
+    }
+
+    private static String escapeCsv(String value) {
+        // This is needed for some CSV use cases
+        String escaped = value.replace("\"", "\"\"");
+        if (escaped.contains(",") || escaped.contains("\"") || escaped.contains("\n") || escaped.contains("\r")) {
+            escaped = "\"" + escaped + "\"";
+        }
+        return escaped;
     }
 }
