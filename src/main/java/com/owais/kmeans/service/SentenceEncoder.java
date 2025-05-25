@@ -1,10 +1,9 @@
 package com.owais.kmeans.service;
 
 
-import ai.onnxruntime.*;
+import ai.djl.onnxruntime.*;
 import org.springframework.stereotype.Component;
-
-import javax.annotation.PostConstruct;
+import com.owais.kmeans.service.Tokenizer;
 import java.nio.LongBuffer;
 import java.util.*;
 
@@ -14,7 +13,6 @@ public class SentenceEncoder {
     private OrtEnvironment env;
     private OrtSession session;
 
-    @PostConstruct
     public void init() throws OrtException {
         env = OrtEnvironment.getEnvironment();
         OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
