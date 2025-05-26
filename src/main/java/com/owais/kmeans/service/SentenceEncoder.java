@@ -1,50 +1,39 @@
 package com.owais.kmeans.service;
 
 
-import ai.onnxruntime.*;
+import org.springframework.stereotype.Component;
+import com.owais.kmeans.service.Tokenizer;
+import java.nio.LongBuffer;
 import java.util.*;
 
+@Component
 public class SentenceEncoder {
-    private OrtEnvironment env;
-    private OrtSession session;
+    private static final int EMBEDDING_SIZE = 128;
 
-    public TextEncoder(String modelPath) throws OrtException {
-        env = OrtEnvironment.getEnvironment();
-        session = env.createSession(modelPath, new OrtSession.SessionOptions());
-    }
+    public double[] encode(String text) {
+        double[] vector = new double[EMBEDDING_SIZE];
+        Arrays.fill(vector, 0.0);
 
-    public double[] encode(String text) throws OrtException {
-        // Tokenize text using external tokenizer (must match training tokenizer)
-        int[] inputIds = tokenize(text);
-        long[] inputIdsLong = Arrays.stream(inputIds).asLongStream().toArray();
-        long[] attentionMask = new long[inputIds.length];
-        Arrays.fill(attentionMask, 1);
+        if (text == null || text.isEmpty()) return vector;
 
-        // Prepare input
-        OnnxTensor inputIdTensor = OnnxTensor.createTensor(env, new long[][]{inputIdsLong});
-        OnnxTensor attentionMaskTensor = OnnxTensor.createTensor(env, new long[][]{attentionMask});
+        String[] tokens = text.toLowerCase().split("\\s+");
 
-        Map<String, OnnxTensor> inputs = Map.of(
-            "input_ids", inputIdTensor,
-            "attention_mask", attentionMaskTensor
-        );
-
-        // Run the model
-        OrtSession.Result result = session.run(inputs);
-        float[][] embeddings = (float[][]) result.get(0).getValue();
-
-        // Convert float[] to double[]
-        double[] doubleEmbeddings = new double[embeddings[0].length];
-        for (int i = 0; i < embeddings[0].length; i++) {
-            doubleEmbeddings[i] = embeddings[0][i];
+        for (String token : tokens) {
+            int hash = Math.abs(token.hashCode());
+            int index = hash % EMBEDDING_SIZE;
+            vector[index] += 1.0;
         }
 
-        return doubleEmbeddings;
-    }
+        // Optional: Normalize the vector
+        double norm = 0.0;
+        for (double val : vector) norm += val * val;
+        norm = Math.sqrt(norm);
+        if (norm > 0) {
+            for (int i = 0; i < vector.length; i++) {
+                vector[i] /= norm;
+            }
+        }
 
-    private int[] tokenize(String text) {
-        // Use the same tokenizer used to train the model (e.g., WordPiece or BPE)
-        // You can call a Python microservice or use a Java tokenizer (like HuggingFace Tokenizers via JNI)
-        throw new UnsupportedOperationException("Tokenizer not implemented");
+        return vector;
     }
 }
