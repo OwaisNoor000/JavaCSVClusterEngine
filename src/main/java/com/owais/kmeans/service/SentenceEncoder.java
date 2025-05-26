@@ -1,60 +1,50 @@
 package com.owais.kmeans.service;
 
 
-import ai.djl.onnxruntime.*;
-import org.springframework.stereotype.Component;
-import com.owais.kmeans.service.Tokenizer;
-import java.nio.LongBuffer;
+import ai.onnxruntime.*;
 import java.util.*;
 
-@Component
 public class SentenceEncoder {
-
     private OrtEnvironment env;
     private OrtSession session;
 
-    public void init() throws OrtException {
+    public TextEncoder(String modelPath) throws OrtException {
         env = OrtEnvironment.getEnvironment();
-        OrtSession.SessionOptions opts = new OrtSession.SessionOptions();
-        session = env.createSession("models/all-MiniLM-L6-v2.onnx", opts);
+        session = env.createSession(modelPath, new OrtSession.SessionOptions());
     }
 
-    public float[] encode(String sentence) throws Exception {
-        Tokenizer tokenizer = new Tokenizer();
-        Tokenizer.Input input = tokenizer.tokenize(sentence);
+    public double[] encode(String text) throws OrtException {
+        // Tokenize text using external tokenizer (must match training tokenizer)
+        int[] inputIds = tokenize(text);
+        long[] inputIdsLong = Arrays.stream(inputIds).asLongStream().toArray();
+        long[] attentionMask = new long[inputIds.length];
+        Arrays.fill(attentionMask, 1);
 
-        Map<String, OnnxTensor> inputs = new HashMap<>();
-        inputs.put("input_ids", OnnxTensor.createTensor(env, input.inputIds));
-        inputs.put("attention_mask", OnnxTensor.createTensor(env, input.attentionMask));
+        // Prepare input
+        OnnxTensor inputIdTensor = OnnxTensor.createTensor(env, new long[][]{inputIdsLong});
+        OnnxTensor attentionMaskTensor = OnnxTensor.createTensor(env, new long[][]{attentionMask});
 
+        Map<String, OnnxTensor> inputs = Map.of(
+            "input_ids", inputIdTensor,
+            "attention_mask", attentionMaskTensor
+        );
+
+        // Run the model
         OrtSession.Result result = session.run(inputs);
-        float[][] tokenEmbeddings = (float[][]) result.get(0).getValue();
+        float[][] embeddings = (float[][]) result.get(0).getValue();
 
-        // Compute mean pooling over token embeddings
-        float[] avgEmbedding = meanPool(tokenEmbeddings, input.attentionMask[0]);
+        // Convert float[] to double[]
+        double[] doubleEmbeddings = new double[embeddings[0].length];
+        for (int i = 0; i < embeddings[0].length; i++) {
+            doubleEmbeddings[i] = embeddings[0][i];
+        }
 
-        result.close();
-        return avgEmbedding;
+        return doubleEmbeddings;
     }
 
-    private float[] meanPool(float[][] embeddings, long[] attentionMask) {
-        int dim = embeddings[0].length;
-        float[] sum = new float[dim];
-        int count = 0;
-
-        for (int i = 0; i < embeddings.length; i++) {
-            if (attentionMask[i] == 1) {
-                for (int j = 0; j < dim; j++) {
-                    sum[j] += embeddings[i][j];
-                }
-                count++;
-            }
-        }
-
-        for (int j = 0; j < dim; j++) {
-            sum[j] /= count;
-        }
-
-        return sum;
+    private int[] tokenize(String text) {
+        // Use the same tokenizer used to train the model (e.g., WordPiece or BPE)
+        // You can call a Python microservice or use a Java tokenizer (like HuggingFace Tokenizers via JNI)
+        throw new UnsupportedOperationException("Tokenizer not implemented");
     }
 }
